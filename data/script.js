@@ -8,11 +8,19 @@ specSelector.addEventListener("change", showSpec);
 results.sort((a,b) => a.title.localeCompare(b.title)).forEach(s => {
   if (s.algorithms) {
     const opt = document.createElement("option");
+    opt.dataset.spec = s.shortname;
     opt.value = s.algorithms;
     opt.textContent = s.title;
     specSelector.append(opt);
   }
 });
+
+const m = window.location.search.match(/\?s=(.+)$/);
+if (m) {
+  const spec = m[1];
+  specSelector.value = specSelector.querySelector(`option[data-spec="${spec}"]`)?.value;
+  specSelector.dispatchEvent(new Event("change"));
+}
 
 function showAlgo(a, level = 0) {
   const ret = [];
@@ -70,6 +78,9 @@ function showAlgo(a, level = 0) {
 }
 
 async function showSpec(e) {
+
+  const specShortname = specSelector.children[specSelector.selectedIndex].dataset.spec;
+  history.pushState({}, "", "?s=" + specShortname);
   const { algorithms } = await (await fetch(e.target.value)).json();
   algos.innerHTML = "";
   for (const a of algorithms) {
