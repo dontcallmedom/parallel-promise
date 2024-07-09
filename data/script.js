@@ -2,6 +2,7 @@ const specSelector = document.getElementById("spec");
 const algos = document.getElementById("algos");
 
 const { results } = await (await fetch("./index.json")).json();
+const algoUrls = new Set(await (await fetch("./dfns.json")).json());
 
 specSelector.addEventListener("change", showSpec);
 
@@ -22,7 +23,11 @@ if (m) {
   specSelector.dispatchEvent(new Event("change"));
 }
 
-function showAlgo(a, level = 0) {
+let contextualParallel;
+function showAlgo(a, level = 0, parallel = false) {
+  if (level === 0 || level < contextualParallel) {
+    contextualParallel = undefined;
+  }
   const ret = [];
   if (level === 0) {
     const heading = document.createElement("h2");
@@ -40,23 +45,104 @@ function showAlgo(a, level = 0) {
     }
     ret.push(heading);
   }
+  let embedParallel = false;
+  let remainingParallel = false;
+  let thread = "main";
+  const symbols = [];
   if (a.html) {
     const intro = document.createElement("div");
     intro.innerHTML = a.html;
+    // duplicate content
+    if (intro.children[0]?.tagName === "OL") {
+      intro.innerHTML = "";
+    }
+    const linkUrls = new Set([...intro.querySelectorAll("a[href]")].map(n => n.href));
+    const text = intro.textContent.toLowerCase().trim()
+	  .replace(/^([a-z]+:) /, '')
+    ;
+    remainingParallel = (text.includes("remaining steps") || text.includes("remainder") || text.includes("continue running")) && text.includes("in parallel") && (level > 0 || (level === 0 && !text.includes(" synchronous")));
+    if (remainingParallel) {
+      contextualParallel = level;
+    }
+    embedParallel = !remainingParallel && text.includes("in parallel");
+
+    thread = embedParallel || parallel || contextualParallel >= level ? "parallel" : "main";
+
+    if ((level === 0 && text.includes(" synchronous")) || text.startsWith("⌛")) {
+      thread = "main";
+    }
+    if ((text.includes("queue") && text.includes("task")) || text.includes("await a stable state")) {
+      thread = "queued";
+    }
+
+    if (embedParallel || remainingParallel) {
+      intro.classList.add("invoke-parallel");
+    }
+
+    if (level > 0 && (text.startsWith("let") || text.includes(". let"))) {
+      symbols.push("init");
+    }
+    if (level > 0 && (text.startsWith("if") || text.startsWith("otherwise") || text.startsWith("while"))) {
+      symbols.push("condition");
+    }
+    if (level > 0 && (text.includes("jump") && text.includes("step") || text.includes("break"))) {
+      symbols.push("jump");
+    }
+    if (level > 0 && algoUrls.intersection(linkUrls).size > 0) {
+      symbols.push("invoke");
+    }
+
+    if (level > 0 && text.includes("return")) {
+      symbols.push("return");
+    }
+    intro.dataset.comment =  `${level}, ${contextualParallel}, ${parallel}`;
+    symbols.toReversed().forEach(type => {
+      const span = document.createElement("span");
+      span.className = type;
+      span.classList.add("step-type");
+      let sym;
+      switch(type) {
+      case "init":
+	sym = "⬡";
+	break;
+      case "condition":
+	sym = "◇";
+	break;
+      case "jump":
+	sym = "⏩";
+	break;
+      case "invoke":
+	sym = "▥";
+	break;
+      case "return":
+	sym = "⏎";
+	break;
+      }
+      span.textContent = sym;
+      intro.prepend(span);
+    });
     ret.push(intro);
   }
   if (!a.steps) return ret;
   const container = document.createElement(a.operation === "switch" ? "dl" : "ol");
+  container.className = "level" + level;
   for (const step of a.steps) {
     if (step.case) {
       const dt = document.createElement("dt");
       dt.innerHTML = step.case;
       const dd = document.createElement("dd");
-      dd.append(...showAlgo(step, level + 1));
+      dd.append(...showAlgo(step, level + 1, parallel || embedParallel));
+      dd.classList.add(thread);
+      dt.className = thread;
+      const span = document.createElement("span");
+      span.className = "condition";
+      span.textContent = "◇";
+      dt.prepend(span);
       container.append(dt, dd);
     } else {
       const li = document.createElement("li");
-      li.append(...showAlgo(step, level + 1));
+      li.className = thread;
+      li.append(...showAlgo(step, level + 1, parallel || embedParallel));
       container.append(li);
     }
   }

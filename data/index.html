@@ -1,9 +1,23 @@
 <!doctype html>
 <html lang=en>
+  <meta charset="utf-8">
   <title>Algorithm browser</title>
   <style>
     .additional { background-color: #ffe;}
     .ignored { background-color: #fef;}
+    section { clear: right;}
+    /* .level0 { width: 50%;}
+    .parallel { float: right; width: 45%; margin-top: -2em; */
+    .main { background-color: #ddf; }
+    .queued { background-color: #dff; }
+    .parallel { background-color: #cfc;}
+    .main > .main, .main :not(.parallel) .main, .parallel > .parallel, .parallel :not(.main) .parallel { background-color: none;}
+    .init { color: green;}
+    .return { color: red;}
+    .jump { color: blue;}
+    .condition { color: blue;}
+    .step-type { float: left;}
+
   </style>
   <script type=module src="script.js"></script>
   <body>
